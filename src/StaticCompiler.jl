@@ -8,6 +8,7 @@ using Libdl: Libdl, dlsym, dlopen
 using Base: RefValue
 using Serialization: serialize, deserialize
 using Clang_jll: clang
+using LazyArtifacts
 
 export compile, load_function, compile_executable
 export native_code_llvm, native_code_typed, native_llvm_module, native_code_native
@@ -352,7 +353,15 @@ function generate_executable(f, tt, path::String = tempname(), name = GPUCompile
         flush(io)
 
         # Pick a compiler
-        cc = Sys.isapple() ? `cc` : clang()
+        @static if Sys.iswindows()
+            cc_path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int == Int64 ? "mingw64" : "mingw32"), "bin", "gcc.exe")
+            cc = `$cc_path`
+            cc = addenv(cc, "PATH" => string(ENV["PATH"], ";", dirname(cc_path)))
+        else
+            cc = Sys.isapple() ? `cc` : clang()
+        end
+        # run(`gcc -fPIC -O3 -msse3 -xc -shared $obj_path -o $lib_path -Wl,--export-all-symbols`)
+        # run(`$cc -shared $obj_path -o $lib_path`)
         # Compile!
         if Sys.isapple()
             # Apple no longer uses _start, so we can just specify a custom entry
